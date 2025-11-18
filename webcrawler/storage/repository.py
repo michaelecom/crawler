@@ -210,6 +210,59 @@ class CrawlSessionRepository(BaseRepository):
         )
         logger.info("crawl_session_deleted", session_id=session_id)
 
+    async def get_all_sessions(
+        self, limit: int = 100, offset: int = 0
+    ) -> list[CrawlSession]:
+        """
+        Alias для get_all для совместимости с CLI.
+
+        Args:
+            limit: Максимум записей
+            offset: Смещение
+
+        Returns:
+            list[CrawlSession]: Список сессий
+        """
+        return await self.get_all(limit=limit, offset=offset)
+
+    async def delete_old_sessions(
+        self, older_than: datetime, status: Optional[str] = None
+    ) -> int:
+        """
+        Удалить старые сессии.
+
+        Args:
+            older_than: Дата отсечки
+            status: Фильтр по статусу (опционально)
+
+        Returns:
+            int: Количество удалённых сессий
+        """
+        from sqlalchemy import and_
+
+        conditions = [CrawlSession.created_at < older_than]
+
+        if status:
+            conditions.append(CrawlSession.status == status)
+
+        # Подсчёт перед удалением
+        count_result = await self.session.execute(
+            select(func.count(CrawlSession.id)).where(and_(*conditions))
+        )
+        count = count_result.scalar() or 0
+
+        # Удаление
+        await self.session.execute(delete(CrawlSession).where(and_(*conditions)))
+
+        logger.info(
+            "old_sessions_deleted",
+            count=count,
+            older_than=older_than,
+            status=status,
+        )
+
+        return count
+
 
 class URLRepository(BaseRepository):
     """
@@ -419,6 +472,61 @@ class URLRepository(BaseRepository):
             )
         )
         return result.scalar() or 0
+
+    async def update_metadata(
+        self,
+        url_id: int,
+        title: Optional[str] = None,
+        meta_description: Optional[str] = None,
+        meta_keywords: Optional[str] = None,
+        meta_robots: Optional[str] = None,
+        language: Optional[str] = None,
+        has_schema_org: Optional[bool] = None,
+        has_open_graph: Optional[bool] = None,
+        structured_data: Optional[dict] = None,
+        internal_links_count: Optional[int] = None,
+        external_links_count: Optional[int] = None,
+        content_hash: Optional[str] = None,
+        canonical_url: Optional[str] = None,
+    ) -> None:
+        """
+        Обновить метаданные URL после парсинга.
+
+        Args:
+            url_id: ID URL
+            **kwargs: Метаданные для обновления
+        """
+        update_data = {}
+
+        if title is not None:
+            update_data["title"] = title
+        if meta_description is not None:
+            update_data["meta_description"] = meta_description
+        if meta_keywords is not None:
+            update_data["meta_keywords"] = meta_keywords
+        if meta_robots is not None:
+            update_data["meta_robots"] = meta_robots
+        if language is not None:
+            update_data["language"] = language
+        if has_schema_org is not None:
+            update_data["has_schema_org"] = has_schema_org
+        if has_open_graph is not None:
+            update_data["has_open_graph"] = has_open_graph
+        if structured_data is not None:
+            update_data["structured_data"] = structured_data
+        if internal_links_count is not None:
+            update_data["internal_links_count"] = internal_links_count
+        if external_links_count is not None:
+            update_data["external_links_count"] = external_links_count
+        if content_hash is not None:
+            update_data["content_hash"] = content_hash
+        if canonical_url is not None:
+            update_data["canonical_url"] = canonical_url
+
+        if update_data:
+            await self.session.execute(
+                update(URL).where(URL.id == url_id).values(**update_data)
+            )
 
 
 class LinkRepository(BaseRepository):
@@ -654,3 +762,62 @@ class StatisticsRepository(BaseRepository):
             .where(Statistics.session_id == session_id)
             .values(**kwargs)
         )
+
+    async def update_statistics(
+        self,
+        session_id: int,
+        total_urls: Optional[int] = None,
+        total_pages_crawled: Optional[int] = None,
+        total_errors: Optional[int] = None,
+        total_duplicates: Optional[int] = None,
+        status_2xx_count: Optional[int] = None,
+        status_3xx_count: Optional[int] = None,
+        status_4xx_count: Optional[int] = None,
+        status_5xx_count: Optional[int] = None,
+        avg_response_time: Optional[float] = None,
+        total_bytes_downloaded: Optional[int] = None,
+        pages_per_second: Optional[float] = None,
+        top_domains: Optional[dict] = None,
+        top_error_types: Optional[dict] = None,
+        top_content_types: Optional[dict] = None,
+    ) -> None:
+        """
+        Обновить статистику с конкретными параметрами.
+
+        Args:
+            session_id: ID сессии
+            **kwargs: Поля для обновления
+        """
+        update_data = {}
+
+        if total_urls is not None:
+            update_data["total_urls"] = total_urls
+        if total_pages_crawled is not None:
+            update_data["total_pages_crawled"] = total_pages_crawled
+        if total_errors is not None:
+            update_data["total_errors"] = total_errors
+        if total_duplicates is not None:
+            update_data["total_duplicates"] = total_duplicates
+        if status_2xx_count is not None:
+            update_data["status_2xx_count"] = status_2xx_count
+        if status_3xx_count is not None:
+            update_data["status_3xx_count"] = status_3xx_count
+        if status_4xx_count is not None:
+            update_data["status_4xx_count"] = status_4xx_count
+        if status_5xx_count is not None:
+            update_data["status_5xx_count"] = status_5xx_count
+        if avg_response_time is not None:
+            update_data["avg_response_time"] = avg_response_time
+        if total_bytes_downloaded is not None:
+            update_data["total_bytes_downloaded"] = total_bytes_downloaded
+        if pages_per_second is not None:
+            update_data["pages_per_second"] = pages_per_second
+        if top_domains is not None:
+            update_data["top_domains"] = top_domains
+        if top_error_types is not None:
+            update_data["top_error_types"] = top_error_types
+        if top_content_types is not None:
+            update_data["top_content_types"] = top_content_types
+
+        if update_data:
+            await self.update(session_id, **update_data)
