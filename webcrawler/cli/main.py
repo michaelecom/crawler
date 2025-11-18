@@ -24,7 +24,14 @@ from rich.table import Table
 
 from webcrawler.analyzers import ContentAnalyzer, LinkExtractor, StatsCalculator
 from webcrawler.core.crawler import Crawler, CrawlEvent, CrawlStatus
-from webcrawler.export import JSONExporter, CSVExporter, GraphMLExporter
+from webcrawler.export import (
+    JSONExporter,
+    CSVExporter,
+    GraphMLExporter,
+    HTMLExporter,
+    PDFExporter,
+    ExcelExporter,
+)
 from webcrawler.storage.database import close_db_manager, init_db_manager
 from webcrawler.storage.repository import CrawlSessionRepository
 from webcrawler.utils.config import Config, init_config
@@ -567,7 +574,7 @@ def export(
         "json",
         "--format",
         "-f",
-        help="Формат экспорта (json, csv, graphml)"
+        help="Формат экспорта (json, csv, graphml, html, pdf, excel)"
     ),
     output: Path = typer.Option(
         None,
@@ -605,6 +612,9 @@ def export(
         crawler export abc123 --format json --output results.json
         crawler export abc123 --format csv --split
         crawler export abc123 --format graphml --output graph.graphml
+        crawler export abc123 --format html --output report.html
+        crawler export abc123 --format pdf --output report.pdf
+        crawler export abc123 --format excel --output report.xlsx
     """
     try:
         console.print("[bold blue]Export данных краулинга[/bold blue]\n")
@@ -618,7 +628,10 @@ def export(
             extensions = {
                 "json": ".json",
                 "csv": ".csv",
-                "graphml": ".graphml"
+                "graphml": ".graphml",
+                "html": ".html",
+                "pdf": ".pdf",
+                "excel": ".xlsx"
             }
             output = Path(f"{session_id}{extensions.get(format, '.txt')}")
 
@@ -654,9 +667,44 @@ def export(
                 )
             )
 
+        elif format == "html":
+            exporter = HTMLExporter(db_manager)
+            asyncio.run(
+                exporter.export(
+                    session_id=session_id,
+                    output_path=str(output),
+                    theme="light",
+                    include_charts=True,
+                    include_tables=True
+                )
+            )
+
+        elif format == "pdf":
+            exporter = PDFExporter(db_manager)
+            asyncio.run(
+                exporter.export(
+                    session_id=session_id,
+                    output_path=str(output),
+                    page_size="A4",
+                    orientation="portrait"
+                )
+            )
+
+        elif format == "excel":
+            exporter = ExcelExporter(db_manager)
+            asyncio.run(
+                exporter.export(
+                    session_id=session_id,
+                    output_path=str(output),
+                    include_charts=True,
+                    include_links=True,
+                    include_errors=True
+                )
+            )
+
         else:
             console.print(f"[bold red]Неизвестный формат:[/bold red] {format}")
-            console.print("\n[dim]Доступные форматы: json, csv, graphml[/dim]")
+            console.print("\n[dim]Доступные форматы: json, csv, graphml, html, pdf, excel[/dim]")
             sys.exit(1)
 
         console.print(f"\n[green]✓[/green] Экспорт завершён: [cyan]{output}[/cyan]")

@@ -26,6 +26,9 @@ from webcrawler.export.base import BaseExporter, ExportFilter
 from webcrawler.export.json_exporter import JSONExporter, StreamingJSONExporter
 from webcrawler.export.csv_exporter import CSVExporter
 from webcrawler.export.graphml_exporter import GraphMLExporter
+from webcrawler.export.html_exporter import HTMLExporter
+from webcrawler.export.pdf_exporter import PDFExporter
+from webcrawler.export.excel_exporter import ExcelExporter
 
 __all__ = [
     # Base
@@ -36,4 +39,7 @@ __all__ = [
     "StreamingJSONExporter",
     "CSVExporter",
     "GraphMLExporter",
+    "HTMLExporter",
+    "PDFExporter",
+    "ExcelExporter",
 ]
