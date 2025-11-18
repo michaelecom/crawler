@@ -22,6 +22,7 @@ from rich.progress import (
 )
 from rich.table import Table
 
+from webcrawler.analyzers import ContentAnalyzer, LinkExtractor, StatsCalculator
 from webcrawler.core.crawler import Crawler, CrawlEvent, CrawlStatus
 from webcrawler.export import JSONExporter, CSVExporter, GraphMLExporter
 from webcrawler.storage.database import close_db_manager, init_db_manager
@@ -668,6 +669,132 @@ def export(
         sys.exit(1)
     except Exception as e:
         console.print(f"[bold red]Ошибка экспорта:[/bold red] {e}")
+        sys.exit(1)
+
+
+@app.command()
+def analyze(
+    session_id: str = typer.Argument(..., help="ID сессии для анализа"),
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Путь к файлу конфигурации",
+        exists=True,
+    ),
+    content: bool = typer.Option(
+        True,
+        "--content/--no-content",
+        help="Анализ контента и SEO"
+    ),
+    links: bool = typer.Option(
+        True,
+        "--links/--no-links",
+        help="Анализ ссылок"
+    ),
+    stats: bool = typer.Option(
+        True,
+        "--stats/--no-stats",
+        help="Статистика краулинга"
+    ),
+):
+    """
+    Анализировать результаты краулинга.
+
+    Примеры:
+        crawler analyze abc123
+        crawler analyze abc123 --content --links
+        crawler analyze abc123 --stats
+    """
+    try:
+        console.print("[bold blue]Анализ результатов краулинга[/bold blue]\n")
+
+        # Инициализация
+        config = init_config(str(config_file) if config_file else None)
+        db_manager = asyncio.run(init_db_manager(config))
+
+        # Content анализ
+        if content:
+            console.print("[bold cyan]📊 Анализ контента и SEO[/bold cyan]")
+
+            analyzer = ContentAnalyzer(db_manager)
+            report = asyncio.run(analyzer.analyze(session_id))
+
+            # Вывод результатов
+            console.print(f"\nSEO Score: [bold green]{report.seo_score}[/bold green]/100")
+            console.print(f"Всего проблем: {len(report.issues)}")
+
+            # Группировка по severity
+            severity_counts = report.summary
+            if "severity_critical" in severity_counts:
+                console.print(f"  [bold red]Critical:[/bold red] {severity_counts['severity_critical']}")
+            if "severity_error" in severity_counts:
+                console.print(f"  [bold yellow]Error:[/bold yellow] {severity_counts['severity_error']}")
+            if "severity_warning" in severity_counts:
+                console.print(f"  [dim]Warning:[/dim] {severity_counts['severity_warning']}")
+
+            # Топ 10 проблем
+            if report.issues:
+                console.print("\n[bold]Топ проблем:[/bold]")
+                for i, issue in enumerate(report.issues[:10], 1):
+                    severity_color = {
+                        "critical": "bold red",
+                        "error": "yellow",
+                        "warning": "dim",
+                        "info": "dim"
+                    }.get(issue.severity.value, "dim")
+                    console.print(
+                        f"  {i}. [{severity_color}]{issue.severity.value}[/{severity_color}]: "
+                        f"{issue.message[:80]}"
+                    )
+
+        # Link анализ
+        if links:
+            console.print("\n[bold cyan]🔗 Анализ ссылок[/bold cyan]")
+
+            extractor = LinkExtractor(db_manager)
+            link_report = asyncio.run(extractor.analyze(session_id))
+
+            console.print(f"\nВсего ссылок: {link_report.total_links}")
+            console.print(f"  Внутренних: {link_report.internal_links}")
+            console.print(f"  Внешних: {link_report.external_links}")
+            console.print(f"Orphan pages: {len(link_report.orphan_pages)}")
+
+            # Hub pages
+            if link_report.hub_pages:
+                console.print("\n[bold]Топ 5 Hub pages:[/bold]")
+                for i, (url, count) in enumerate(link_report.hub_pages[:5], 1):
+                    console.print(f"  {i}. {url[:60]}... ({count} исходящих)")
+
+            # Authority pages
+            if link_report.authority_pages:
+                console.print("\n[bold]Топ 5 Authority pages:[/bold]")
+                for i, (url, count) in enumerate(link_report.authority_pages[:5], 1):
+                    console.print(f"  {i}. {url[:60]}... ({count} входящих)")
+
+        # Статистика
+        if stats:
+            console.print("\n[bold cyan]📈 Статистика краулинга[/bold cyan]")
+
+            calculator = StatsCalculator(db_manager)
+            crawl_stats = asyncio.run(calculator.calculate(session_id))
+
+            # Вывод сводки
+            summary = calculator.get_summary(crawl_stats)
+            console.print(f"\n{summary}")
+
+        # Cleanup
+        asyncio.run(close_db_manager(db_manager))
+
+        console.print("\n[green]✓[/green] Анализ завершён")
+
+    except ValueError as e:
+        console.print(f"[bold red]Ошибка:[/bold red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Ошибка анализа:[/bold red] {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
