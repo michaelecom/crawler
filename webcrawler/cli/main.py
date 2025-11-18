@@ -23,6 +23,7 @@ from rich.progress import (
 from rich.table import Table
 
 from webcrawler.core.crawler import Crawler, CrawlEvent, CrawlStatus
+from webcrawler.export import JSONExporter, CSVExporter, GraphMLExporter
 from webcrawler.storage.database import close_db_manager, init_db_manager
 from webcrawler.storage.repository import CrawlSessionRepository
 from webcrawler.utils.config import Config, init_config
@@ -555,6 +556,118 @@ def init(
 
     except Exception as e:
         console.print(f"[bold red]Ошибка:[/bold red] {e}")
+        sys.exit(1)
+
+
+@app.command()
+def export(
+    session_id: str = typer.Argument(..., help="ID сессии для экспорта"),
+    format: str = typer.Option(
+        "json",
+        "--format",
+        "-f",
+        help="Формат экспорта (json, csv, graphml)"
+    ),
+    output: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Путь к выходному файлу"
+    ),
+    config_file: Optional[Path] = typer.Option(
+        None,
+        "--config",
+        "-c",
+        help="Путь к файлу конфигурации",
+        exists=True,
+    ),
+    compress: bool = typer.Option(
+        False,
+        "--compress",
+        help="Сжать файл (gzip)"
+    ),
+    pretty: bool = typer.Option(
+        True,
+        "--pretty/--compact",
+        help="Красивое форматирование (только JSON)"
+    ),
+    split: bool = typer.Option(
+        False,
+        "--split",
+        help="Разделить на несколько файлов (только CSV)"
+    ),
+):
+    """
+    Экспортировать результаты краулинга.
+
+    Примеры:
+        crawler export abc123 --format json --output results.json
+        crawler export abc123 --format csv --split
+        crawler export abc123 --format graphml --output graph.graphml
+    """
+    try:
+        console.print("[bold blue]Export данных краулинга[/bold blue]\n")
+
+        # Инициализация
+        config = init_config(str(config_file) if config_file else None)
+        db_manager = asyncio.run(init_db_manager(config))
+
+        # Определить выходной файл
+        if output is None:
+            extensions = {
+                "json": ".json",
+                "csv": ".csv",
+                "graphml": ".graphml"
+            }
+            output = Path(f"{session_id}{extensions.get(format, '.txt')}")
+
+        # Выбрать экспортер
+        if format == "json":
+            exporter = JSONExporter(db_manager)
+            asyncio.run(
+                exporter.export(
+                    session_id=session_id,
+                    output_path=str(output),
+                    pretty=pretty,
+                    compress=compress
+                )
+            )
+
+        elif format == "csv":
+            exporter = CSVExporter(db_manager)
+            asyncio.run(
+                exporter.export(
+                    session_id=session_id,
+                    output_path=str(output),
+                    split_by_type=split
+                )
+            )
+
+        elif format == "graphml":
+            exporter = GraphMLExporter(db_manager)
+            asyncio.run(
+                exporter.export(
+                    session_id=session_id,
+                    output_path=str(output),
+                    max_nodes=10000
+                )
+            )
+
+        else:
+            console.print(f"[bold red]Неизвестный формат:[/bold red] {format}")
+            console.print("\n[dim]Доступные форматы: json, csv, graphml[/dim]")
+            sys.exit(1)
+
+        console.print(f"\n[green]✓[/green] Экспорт завершён: [cyan]{output}[/cyan]")
+
+        # Cleanup
+        asyncio.run(close_db_manager(db_manager))
+
+    except ValueError as e:
+        console.print(f"[bold red]Ошибка:[/bold red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Ошибка экспорта:[/bold red] {e}")
         sys.exit(1)
 
 
