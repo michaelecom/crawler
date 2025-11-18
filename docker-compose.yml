@@ -1,0 +1,196 @@
+# Docker Compose для Enterprise Web Crawler
+# Полная инфраструктура для production deployment
+
+version: '3.8'
+
+services:
+  # Основной краулер
+  crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: webcrawler
+    restart: unless-stopped
+    environment:
+      # Database
+      - CRAWLER_DB_TYPE=postgresql
+      - CRAWLER_DB_HOST=postgres
+      - CRAWLER_DB_PORT=5432
+      - CRAWLER_DB_NAME=webcrawler
+      - CRAWLER_DB_USER=crawler
+      - CRAWLER_DB_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+
+      # Redis
+      - CRAWLER_REDIS_HOST=redis
+      - CRAWLER_REDIS_PORT=6379
+      - CRAWLER_REDIS_DB=0
+
+      # Logging
+      - CRAWLER_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - CRAWLER_LOG_FILE=/logs/crawler.log
+
+      # Rate limiting
+      - CRAWLER_RATE_LIMIT=${RATE_LIMIT:-5}
+      - CRAWLER_MAX_CONCURRENT=${MAX_CONCURRENT:-100}
+
+      # JavaScript
+      - CRAWLER_ENABLE_JS=${ENABLE_JS:-false}
+    volumes:
+      # Конфигурация
+      - ./config:/app/config:ro
+
+      # Данные
+      - crawler_data:/data
+
+      # Логи
+      - crawler_logs:/logs
+
+      # Экспорты
+      - crawler_exports:/exports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - crawler_network
+    ports:
+      - "${CRAWLER_PORT:-8000}:8000"  # Web UI
+      - "${PROMETHEUS_PORT:-9090}:9090"  # Prometheus metrics
+      - "${WEBSOCKET_PORT:-8765}:8765"  # WebSocket для real-time
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        crawler crawl ${START_URL:-https://example.com} --config /app/config/default.yaml
+      "
+
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:16-alpine
+    container_name: webcrawler_postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=crawler
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
+      - POSTGRES_DB=webcrawler
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - crawler_network
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis для распределённых очередей
+  redis:
+    image: redis:7-alpine
+    container_name: webcrawler_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis_data:/data
+    networks:
+      - crawler_network
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgAdmin для управления PostgreSQL (опционально)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: webcrawler_pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=${PGADMIN_EMAIL:-admin@crawler.local}
+      - PGADMIN_DEFAULT_PASSWORD=${PGADMIN_PASSWORD:-admin}
+      - PGADMIN_CONFIG_SERVER_MODE=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - crawler_network
+    ports:
+      - "${PGADMIN_PORT:-5050}:80"
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+  # Prometheus для мониторинга (опционально)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: webcrawler_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    networks:
+      - crawler_network
+    ports:
+      - "${PROM_PORT:-9091}:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    profiles:
+      - monitoring
+
+  # Grafana для визуализации метрик (опционально)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: webcrawler_grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    networks:
+      - crawler_network
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    depends_on:
+      - prometheus
+    profiles:
+      - monitoring
+
+# Volumes для персистентности данных
+volumes:
+  crawler_data:
+    driver: local
+  crawler_logs:
+    driver: local
+  crawler_exports:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+# Сеть для изоляции сервисов
+networks:
+  crawler_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
