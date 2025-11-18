@@ -20,6 +20,13 @@ crawler:
   # JavaScript рендеринг через Playwright
   enable_javascript: false
   javascript_timeout: 30  # секунд
+  javascript_wait_until: "networkidle"  # load, domcontentloaded, networkidle
+  javascript_screenshots: false  # Сохранять скриншоты страниц
+  javascript_wait_for_ajax: true  # Ожидать завершения AJAX запросов
+
+  # Следование ссылкам
+  include_external_links: false  # Обрабатывать внешние ссылки
+  follow_nofollow_links: false  # Следовать по nofollow ссылкам
 
   # Типы контента для обработки
   allowed_content_types:

@@ -23,6 +23,11 @@ class CrawlerConfig(BaseModel):
     restrict_to_domain: bool = Field(default=True, description="Ограничиться одним доменом")
     enable_javascript: bool = Field(default=False, description="Включить JavaScript рендеринг")
     javascript_timeout: int = Field(default=30, gt=0, description="Таймаут JavaScript (секунды)")
+    javascript_wait_until: str = Field(default="networkidle", description="Условие ожидания загрузки")
+    javascript_screenshots: bool = Field(default=False, description="Сохранять скриншоты")
+    javascript_wait_for_ajax: bool = Field(default=True, description="Ожидать AJAX запросы")
+    include_external_links: bool = Field(default=False, description="Обрабатывать внешние ссылки")
+    follow_nofollow_links: bool = Field(default=False, description="Следовать по nofollow ссылкам")
     allowed_content_types: list[str] = Field(
         default_factory=lambda: ["text/html", "application/xhtml+xml"],
         description="Разрешённые типы контента"
@@ -39,6 +44,15 @@ class CrawlerConfig(BaseModel):
         """Валидация стартовых URL."""
         if not v:
             raise ValueError("Должен быть указан хотя бы один start_url")
+        return v
+
+    @field_validator('javascript_wait_until')
+    @classmethod
+    def validate_wait_until(cls, v: str) -> str:
+        """Валидация условия ожидания."""
+        allowed = ["load", "domcontentloaded", "networkidle"]
+        if v not in allowed:
+            raise ValueError(f"javascript_wait_until должен быть одним из {allowed}")
         return v
 
 
