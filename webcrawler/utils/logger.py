@@ -11,7 +11,11 @@ from pathlib import Path
 from typing import Any
 
 import structlog
-from pythonjsonlogger import jsonlogger
+
+try:
+    from pythonjsonlogger import json as jsonlogger
+except ImportError:
+    from pythonjsonlogger import jsonlogger
 
 
 def setup_logging(

@@ -102,16 +102,6 @@ class DatabaseManager:
                 "check_same_thread": False,  # Для async
             }
 
-            # Включаем WAL mode для лучшей конкурентности
-            @event.listens_for(AsyncEngine, "connect")
-            def set_sqlite_pragma(dbapi_conn, connection_record):
-                cursor = dbapi_conn.cursor()
-                cursor.execute("PRAGMA journal_mode=WAL")
-                cursor.execute("PRAGMA synchronous=NORMAL")
-                cursor.execute("PRAGMA cache_size=10000")
-                cursor.execute("PRAGMA temp_store=MEMORY")
-                cursor.close()
-
         else:  # PostgreSQL
             pool_size = self.config.database.postgresql.get("pool_size", 20)
             pool_recycle = self.config.database.postgresql.get("pool_recycle", 3600)
@@ -123,6 +113,17 @@ class DatabaseManager:
 
         # Создаём engine
         self.engine = create_async_engine(self.database_url, **engine_kwargs)
+
+        # Настроить SQLite PRAGMA после создания engine
+        if self.config.database.type == "sqlite":
+            @event.listens_for(self.engine.sync_engine, "connect")
+            def set_sqlite_pragma(dbapi_conn, connection_record):
+                cursor = dbapi_conn.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA cache_size=10000")
+                cursor.execute("PRAGMA temp_store=MEMORY")
+                cursor.close()
 
         # Создаём session factory
         self.session_factory = async_sessionmaker(

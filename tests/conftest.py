@@ -251,6 +251,149 @@ def temp_test_dir(tmp_path) -> Path:
     return test_dir
 
 
+@pytest.fixture
+async def sample_crawl_session(test_db_manager):
+    """
+    Создать тестовую сессию краулинга с данными.
+
+    Возвращает session_id для тестирования экспортеров и анализаторов.
+    """
+    from datetime import datetime, timedelta
+    from webcrawler.storage.models import CrawlSession, URL, Link, Error
+
+    async with test_db_manager.session() as db_session:
+        # Создать сессию
+        session = CrawlSession(
+            session_id="test_session_123",
+            start_url="https://example.com",
+            status="completed",
+            started_at=datetime.utcnow() - timedelta(hours=1),
+            completed_at=datetime.utcnow(),
+            total_urls_discovered=10,
+            total_urls_crawled=10,
+            total_urls_failed=2,
+            total_bytes_downloaded=50000
+        )
+        db_session.add(session)
+
+        # Создать URL
+        urls = [
+            URL(
+                session_id="test_session_123",
+                url="https://example.com",
+                status_code=200,
+                content_type="text/html",
+                depth=0,
+                size_bytes=5000,
+                response_time=0.5,
+                title="Example Domain",
+                crawled_at=datetime.utcnow()
+            ),
+            URL(
+                session_id="test_session_123",
+                url="https://example.com/page1",
+                status_code=200,
+                content_type="text/html",
+                depth=1,
+                size_bytes=3000,
+                response_time=0.3,
+                title="Page 1",
+                crawled_at=datetime.utcnow()
+            ),
+            URL(
+                session_id="test_session_123",
+                url="https://example.com/page2",
+                status_code=200,
+                content_type="text/html",
+                depth=1,
+                size_bytes=4000,
+                response_time=0.4,
+                title="Page 2",
+                crawled_at=datetime.utcnow()
+            ),
+            URL(
+                session_id="test_session_123",
+                url="https://example.com/not-found",
+                status_code=404,
+                content_type="text/html",
+                depth=1,
+                size_bytes=1000,
+                response_time=0.2,
+                title="Not Found",
+                crawled_at=datetime.utcnow()
+            ),
+            URL(
+                session_id="test_session_123",
+                url="https://example.com/image.jpg",
+                status_code=200,
+                content_type="image/jpeg",
+                depth=1,
+                size_bytes=20000,
+                response_time=0.6,
+                crawled_at=datetime.utcnow()
+            ),
+        ]
+
+        for url in urls:
+            db_session.add(url)
+
+        # Создать Links
+        links = [
+            Link(
+                session_id="test_session_123",
+                source_url="https://example.com",
+                target_url="https://example.com/page1",
+                anchor_text="Page 1",
+                link_type="internal",
+                rel="follow"
+            ),
+            Link(
+                session_id="test_session_123",
+                source_url="https://example.com",
+                target_url="https://example.com/page2",
+                anchor_text="Page 2",
+                link_type="internal",
+                rel="follow"
+            ),
+            Link(
+                session_id="test_session_123",
+                source_url="https://example.com/page1",
+                target_url="https://external.com",
+                anchor_text="External Link",
+                link_type="external",
+                rel="nofollow"
+            ),
+        ]
+
+        for link in links:
+            db_session.add(link)
+
+        # Создать Errors
+        errors = [
+            Error(
+                session_id="test_session_123",
+                url="https://example.com/timeout",
+                error_type="timeout",
+                error_message="Request timeout after 30s",
+                occurred_at=datetime.utcnow()
+            ),
+            Error(
+                session_id="test_session_123",
+                url="https://example.com/error",
+                error_type="connection_error",
+                error_message="Connection refused",
+                occurred_at=datetime.utcnow()
+            ),
+        ]
+
+        for error in errors:
+            db_session.add(error)
+
+        await db_session.commit()
+
+    return "test_session_123"
+
+
 # Markers для категоризации тестов
 def pytest_configure(config):
     """Регистрация custom markers."""
