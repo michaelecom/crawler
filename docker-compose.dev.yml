@@ -1,0 +1,88 @@
+# Docker Compose для разработки
+# Упрощённая конфигурация с hot-reload
+
+version: '3.8'
+
+services:
+  # Краулер в dev режиме
+  crawler-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: webcrawler_dev
+    restart: unless-stopped
+    environment:
+      # Database (SQLite для разработки)
+      - CRAWLER_DB_TYPE=sqlite
+      - CRAWLER_DB_PATH=/data/crawler.db
+
+      # Logging
+      - CRAWLER_LOG_LEVEL=DEBUG
+      - CRAWLER_LOG_FILE=/logs/crawler.log
+
+      # Development
+      - CRAWLER_ENV=development
+      - PYTHONUNBUFFERED=1
+    volumes:
+      # Монтируем код для hot-reload
+      - .:/app:rw
+
+      # Данные
+      - ./webcrawler/data:/data
+
+      # Логи
+      - ./logs:/logs
+
+      # Экспорты
+      - ./webcrawler/exports:/exports
+    networks:
+      - crawler_network
+    ports:
+      - "8000:8000"  # Web UI
+      - "9090:9090"  # Prometheus
+      - "8765:8765"  # WebSocket
+    command: bash -c "sleep infinity"  # Для интерактивной работы
+
+  # PostgreSQL (опционально для dev)
+  postgres-dev:
+    image: postgres:16-alpine
+    container_name: webcrawler_postgres_dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=crawler
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=webcrawler_dev
+    volumes:
+      - postgres_dev_data:/var/lib/postgresql/data
+    networks:
+      - crawler_network
+    ports:
+      - "5433:5432"
+    profiles:
+      - postgres
+
+  # Redis (опционально для dev)
+  redis-dev:
+    image: redis:7-alpine
+    container_name: webcrawler_redis_dev
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_dev_data:/data
+    networks:
+      - crawler_network
+    ports:
+      - "6380:6379"
+    profiles:
+      - redis
+
+volumes:
+  postgres_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+
+networks:
+  crawler_network:
+    driver: bridge

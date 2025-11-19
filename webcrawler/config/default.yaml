@@ -1,0 +1,272 @@
+# Конфигурация по умолчанию для Enterprise Web Crawler
+
+crawler:
+  # Начальные точки для краулинга
+  start_urls:
+    - "https://example.com"
+
+  # Глубина рекурсивного обхода (0 = без ограничений)
+  max_depth: 0
+
+  # Максимальное количество страниц для краулинга (0 = без ограничений)
+  max_pages: 0
+
+  # Включать поддомены при краулинге
+  include_subdomains: true
+
+  # Обрабатывать только указанный домен/IP
+  restrict_to_domain: true
+
+  # JavaScript рендеринг через Playwright
+  enable_javascript: false
+  javascript_timeout: 30  # секунд
+  javascript_wait_until: "networkidle"  # load, domcontentloaded, networkidle
+  javascript_screenshots: false  # Сохранять скриншоты страниц
+  javascript_wait_for_ajax: true  # Ожидать завершения AJAX запросов
+
+  # Следование ссылкам
+  include_external_links: false  # Обрабатывать внешние ссылки
+  follow_nofollow_links: false  # Следовать по nofollow ссылкам
+
+  # Типы контента для обработки
+  allowed_content_types:
+    - "text/html"
+    - "application/xhtml+xml"
+    - "application/pdf"
+    - "text/plain"
+    - "application/json"
+    - "image/*"
+    - "text/css"
+    - "application/javascript"
+    - "text/javascript"
+
+  # Максимальный размер загружаемого файла (байты)
+  max_file_size: 104857600  # 100 MB
+
+# Rate limiting
+rate_limiting:
+  # Запросов в секунду (per domain)
+  requests_per_second: 5
+
+  # Задержка между запросами (миллисекунды)
+  delay_between_requests: 200
+
+  # Максимум конкурентных запросов
+  max_concurrent_requests: 100
+
+  # Таймаут запроса (секунд)
+  request_timeout: 30
+
+  # Количество повторов при ошибке
+  max_retries: 3
+
+  # Экспоненциальный backoff при повторах
+  backoff_factor: 2
+
+# Robots.txt
+robots:
+  # Парсить и учитывать robots.txt
+  obey_robots: true
+
+  # User-agent для парсинга robots.txt
+  user_agent: "WebCrawler/1.0"
+
+  # Кастомный User-Agent для HTTP запросов
+  custom_user_agent: "Mozilla/5.0 (compatible; WebCrawler/1.0; +https://github.com/yourusername/webcrawler)"
+
+  # Таймаут для загрузки robots.txt
+  robots_timeout: 10
+
+# Sitemap
+sitemap:
+  # Парсить и использовать sitemap.xml
+  use_sitemap: true
+
+  # Приоритет sitemap URL над обычными
+  prioritize_sitemap: true
+
+  # Таймаут для загрузки sitemap
+  sitemap_timeout: 15
+
+# База данных
+database:
+  # Тип БД: sqlite или postgresql
+  type: "sqlite"
+
+  # Путь к SQLite файлу (относительно корня проекта)
+  sqlite_path: "webcrawler/data/crawler.db"
+
+  # PostgreSQL настройки (для миграции)
+  postgresql:
+    host: "${DB_HOST:localhost}"
+    port: 5432
+    database: "${DB_NAME:webcrawler}"
+    user: "${DB_USER:crawler}"
+    password: "${DB_PASSWORD:}"
+    pool_size: 20
+    pool_recycle: 3600
+
+  # Размер батча для batch операций
+  batch_size: 1000
+
+# Прокси
+proxy:
+  # Использовать прокси
+  enabled: false
+
+  # Тип прокси: http, https, socks5
+  type: "http"
+
+  # Прокси сервер
+  server: "${PROXY_SERVER:}"
+
+  # Порт прокси
+  port: 8080
+
+  # Аутентификация
+  username: "${PROXY_USER:}"
+  password: "${PROXY_PASSWORD:}"
+
+  # Ротация прокси (если несколько)
+  rotate: false
+
+  # Список прокси серверов для ротации
+  servers: []
+
+# Распределённый краулинг
+distributed:
+  enabled: false
+
+  # Redis для координации
+  redis:
+    host: "${REDIS_HOST:localhost}"
+    port: 6379
+    db: 0
+    password: "${REDIS_PASSWORD:}"
+
+  # Количество worker'ов
+  workers: 4
+
+  # Имя очереди задач
+  queue_name: "webcrawler:tasks"
+
+# Экспорт
+export:
+  # Форматы для экспорта
+  formats:
+    - "json"
+    - "html"
+    - "pdf"
+    - "excel"
+
+  # Директория для экспорта
+  output_dir: "webcrawler/exports/"
+
+  # Визуализация графа
+  graph_visualization:
+    enabled: true
+    max_nodes: 10000  # Ограничение для больших сайтов
+    layout: "force_directed"  # или "hierarchical", "circular"
+
+    # Параметры экспорта графа
+    export_formats:
+      - "html"  # Интерактивный HTML
+      - "png"   # Статичное изображение
+      - "graphml"  # Для импорта в Gephi/Cytoscape
+
+# Логирование
+logging:
+  # Уровень логирования
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+  # Файл логов
+  file: "webcrawler/logs/crawler.log"
+
+  # Ротация логов
+  rotation: "1 day"
+  retention: "30 days"
+
+  # Формат логов
+  format: "detailed"  # или "json", "simple"
+
+  # Логирование в консоль
+  console: true
+
+  # Цветной вывод
+  colorize: true
+
+# Производительность
+performance:
+  # Размер батча для записи в БД
+  db_batch_size: 1000
+
+  # Checkpoint интервал (секунд)
+  checkpoint_interval: 300
+
+  # Размер кеша для URL
+  url_cache_size: 100000
+
+  # Использовать Bloom filter для быстрой проверки
+  use_bloom_filter: true
+
+  # Вероятность ложноположительных для Bloom filter
+  bloom_filter_error_rate: 0.001
+
+# Персистентность
+persistence:
+  # Сохранять состояние для возобновления
+  enabled: true
+
+  # Интервал сохранения состояния (секунд)
+  save_interval: 60
+
+  # Автоматическое возобновление при запуске
+  auto_resume: true
+
+# Мониторинг
+monitoring:
+  # Метрики в реальном времени
+  enable_metrics: true
+
+  # Prometheus endpoint
+  prometheus_enabled: false
+  prometheus_port: 9090
+
+  # WebSocket порт для real-time мониторинга
+  websocket_enabled: false
+  websocket_port: 8765
+
+  # Sentry для отслеживания ошибок
+  sentry_enabled: false
+  sentry_dsn: "${SENTRY_DSN:}"
+
+# Аналитика
+analytics:
+  # Детектирование битых ссылок
+  detect_broken_links: true
+
+  # SEO анализ
+  seo_analysis: true
+
+  # Анализ производительности
+  performance_analysis: true
+
+  # Анализ безопасности
+  security_analysis: true
+
+  # Детектирование дубликатов контента
+  detect_duplicate_content: true
+
+# Features флаги
+features:
+  # Incremental crawling (только изменённые страницы)
+  incremental_crawling: false
+
+  # Интеллектуальное определение приоритетов
+  intelligent_prioritization: true
+
+  # Адаптивный rate limiting
+  adaptive_rate_limiting: true
+
+  # Детектирование honeypot ловушек
+  honeypot_detection: true
